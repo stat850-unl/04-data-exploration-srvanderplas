@@ -1,6 +1,6 @@
 ---
 title: "Homework: Reading in Data"
-author: "Firstname Lastname"
+author: "Example Solutions"
 output: html_document
 ---
 
@@ -196,10 +196,53 @@ RUN;
     
 PROC CONTENTS DATA = WORK.openmedpay;
 RUN;
+           
+
 ```
 
-You can delete the information below if you don't need it, but these are handy tricks for using sasmarkdown. 
-```{r tricks, engine="sashtml", engine.path=sasexe, engine.opts=sasopts, error = T}
-/* The collectcode=T option lets you reference data in other chunks, just like in R */
+First, I decided to see which states account for the majority of reimbursements by using this handy macro which outputs the top N most common entries.
+
+```{r, engine="sashtml", engine.path=sasexe, engine.opts=sasopts, error = T, collectcode = T}
+/* Macro from https://blogs.sas.com/content/iml/2018/06/04/top-10-table-bar-chart.html */
+  
+%let TopN = 10;
+%let VarName = Recipient_State;
+
+/* no print. Create output data set of all counts */
+proc freq data=WORK.openmedpay ORDER=FREQ noprint;     
+tables &VarName / out=TopOut;
+run;
+ 
+data Other;      /* keep the values for the Top categories. Use "Others" for the smaller categories */
+set TopOut;
+label topCat = "Top Categories or 'Other'";
+length topCat $ 5; /* Allow up to 5 chars */
+topCat = &VarName;       /* name of original categorical var */
+if _n_ > &TopN then
+    topCat = "Other";    /* merge smaller categories */
+run;
+ 
+proc freq data=Other ORDER=data;   /* order by data and use WEIGHT statement for counts */
+  tables TopCat / plots=FreqPlot(scale=percent);
+  weight Count;                    
+run;
   
 ```
+
+Does the total amount of payment change by state? I got my [boxplot code from a SAS support page](https://support.sas.com/kb/37/767.html#:~:text=PROC%20BOXPLOT%20does%20not%20support,vertical%20axis%20in%20PROC%20SGPLOT.)
+
+```{r, engine="sashtml", engine.path=sasexe, engine.opts=sasopts, error = T, collectcode = T}
+ods graphics on / width=12in;
+PROC SGPLOT data = WORK.openmedpay;
+  VBOX Total_Amount_of_Payment_USDollar / category = Recipient_State;
+  YAXIS type=log logbase=10 logstyle=logexpand;
+run;
+```
+
+From this, I see that AE, AP, and VI are categories that have about 1 entry. AE is apparently "Armed forces Europe" and AP is "Armed Forces Pacific", and VI is the US Virgin Islands. Any analysis we do on these probably needs to account for the limited data (so we might want to e.g. exclude those rows when modeling).
+
+The reimbursements are oddly high for Vermont - that might be worth examining. Minnesota and Massachusetts also have a rather high average reimbursement value. 
+
+Similarly, there are relatively low reimbursements for Mississippi, Arkansas, and Alaska. 
+
+I could do some correlation plots or something, but I think I've found enough to investigate here to call it quits for now. 
