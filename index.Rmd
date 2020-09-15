@@ -135,13 +135,43 @@ data[data$Number_of_Payments_Included_in_Total_Amount > 1,] %>%
   facet_wrap(~Type, scales = "free_y")
 ```
 
-
-
 Things that might require some cleaning:
 - missing data (already addressed here)
 - Categories that may need to be grouped or relabeled
 - It may be worth stripping out some of the data (e.g. the 2 payments that are to entities outside of the US)
-- There are a lot of different things in this dataset to begin with - anything that groups travel expenses with drug development/reimbursement/etc. is ... a bit heterogeneous to get useful information out of. 
+- There are a lot of different things in this dataset to begin with - anything that groups travel expenses with drug development/reimbursement/etc. is a bit heterogeneous to get useful information out of. 
+
+As the data is assembled by humans, you can just about guarantee some inconsistencies in data entry. Capitalization and punctuation are common offenders - we'll learn how to deal with string and character manipulation in the next couple of weeks. 
+```{r}
+company_names <- sort(unique(data$Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name))
+lowercase_companies <- unique(tolower(company_names))
+
+
+
+# some capitalization issues that will interfere with aggregation
+length(company_names) - length(lowercase_companies)
+
+# some others that are just issues with abbreviations or different company divisions
+company_names[116:122]
+company_names[396:397]
+company_names[399:400]
+company_names[409:411]
+```
+
+The `qdap` package has a `check_spelling` function which I'm sure would find some interesting issues as well. 
+
+```{r}
+table(data$Indicate_Drug_or_Biological_or_Device_or_Medical_Supply_1, useNA = 'ifany')
+```
+
+Another thing to check when you're working with data is the distribution of dates/times/etc. To do this we need the `lubridate` package, and we tell it what format our dates are in (month, day, year). It's pretty easy to tell what the days of the week were! More payments get processed on thursdays, it seems, but the Thursday after New Years is popular too - an unusual spike that probably represents a backlog of reimbursements over the holidays.
+
+```{r}
+library(lubridate)
+# Change character date to date object
+data$Date_of_Payment <- mdy(data$Date_of_Payment)
+ggplot(data, aes(x = Date_of_Payment)) + stat_bin(geom = "bar")
+```
 
 ### SAS
 Fill in your code in the chunk below.
@@ -152,9 +182,20 @@ PROC IMPORT DATAFILE = dat OUT = openmedpay
     DBMS = CSV 
     REPLACE; 
     GETNAMES = YES;
-    GUESSINGROWS = 3500;
+    GUESSINGROWS = 22000;
+RUN;
+    
+DATA WORK.openmedpay;
+    SET WORK.openmedpay;
+    RENAME Applicable_Manufacturer_or_Appli = payer_ID 
+           Var13 = payer_Name
+           Var14 = payer_State
+           Var15 = payer_Country;
 RUN;
 
+    
+PROC CONTENTS DATA = WORK.openmedpay;
+RUN;
 ```
 
 You can delete the information below if you don't need it, but these are handy tricks for using sasmarkdown. 
